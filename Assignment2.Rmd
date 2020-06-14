@@ -46,7 +46,7 @@ str(stormdt)
 ```
 
 
-## Data subsetting
+## Data subsetting and processing
 
 We select variables related to population health and economic consequences.
 
@@ -74,5 +74,18 @@ workdt[is.na(propdmgexp), propdmgexp := 10^0 ]
 
 workdt[,cropdmgexp := cropdmgKey[as.character(workdt[,cropdmgexp])]]
 workdt[is.na(cropdmgexp), cropdmgexp := 10^0 ]
+```
+
+## Most harmful event with respect to population health
+
+### Fatalities
+
+```{r}
+hist(workdt[,fatalities])
+summary(workdt[,fatalities])
+
+fata <- workdt[order(-fatalities)]
+
+head(fata[,.(evtype,fatalities)],10)
 ```
 
