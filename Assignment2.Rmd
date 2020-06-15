@@ -15,7 +15,10 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(ggplot2)
 library(data.table)
+library(tidyr)
 ```
+
+# 1. Summary
 
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.The events in the database start in the year 1950 and end in November 2011. 
 
@@ -28,29 +31,28 @@ In the following analysis, we focus on two queations:
 
 2. Across the United States, which types of events have the greatest economic consequences?
 
-## Load Data
+## 2. Data Processing
+
+### 2.1 load data
 
 ```{r imput}
-fileUrl = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+# fileUrl = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
 
-download.file(fileUrl,destfile = "./data/stormdata.csv.bz2")
+# download.file(fileUrl,destfile = "./data/stormdata.csv.bz2")
 
 stormdf = read.csv("./data/stormdata.csv.bz2") %>% janitor::clean_names()
 
 # convert df to dt
 stormdt = as.data.table(stormdf)
-dim(stormdt)
-names(stormdt)
-View(stormdt)
-str(stormdt)
+
 ```
 
 
-## Data subsetting and processing
+### 2.2 Data subsetting and processing
 
 We select variables related to population health and economic consequences.
 
-```{r,cache = TRUE}
+```{r}
 workdt = stormdt[,.(evtype,fatalities,injuries,
                    propdmg,propdmgexp,cropdmg,cropdmgexp)]
 
@@ -76,16 +78,93 @@ workdt[,cropdmgexp := cropdmgKey[as.character(workdt[,cropdmgexp])]]
 workdt[is.na(cropdmgexp), cropdmgexp := 10^0 ]
 ```
 
-## Most harmful event with respect to population health
+### 2.3 Analyses regarding population health
 
-### Fatalities
 
 ```{r}
-hist(workdt[,fatalities])
-summary(workdt[,fatalities])
+# summary(workdt[,fatalities])
+# plot(workdt[,evtype],workdt[,fatalities])
 
-fata <- workdt[order(-fatalities)]
+# sum by event type
+health = workdt[, .(fatalities = sum(fatalities), injuries = sum(injuries), 
+                  totals = sum(fatalities) + sum(injuries)), by = .(evtype)]
 
-head(fata[,.(evtype,fatalities)],10)
+health = health[order(-fatalities),]
+
+health_top = head(health[,.(evtype,fatalities,injuries,totals)],10)
+
+```
+
+### 2.4 Analyses regarding economic consequences
+
+```{r}
+
+# dmg * exp = true cost
+money = workdt[,.(evtype, propdmg,propdmgexp,propcost = propdmg * propdmgexp, 
+                  cropdmg,cropdmgexp,cropcost = cropdmg * cropdmgexp )]
+
+# sum by event type
+moneytotal = money[,.(propcost = sum(propcost),
+                      cropcost = sum(cropcost),
+                      totals = sum(propcost) + sum(cropcost)),
+                      by = .(evtype)]
+
+moneytotal = moneytotal[order(-totals),]
+
+moneytotal_top = head(moneytotal[,.(evtype,propcost,cropcost,totals)],10)
+
+```
+
+
+## 3. Result 
+
+**1. Across the United States, which types of events are most harmful with respect to population health?**
+
+Tornado is the event that causes most fatalities and injuries. 
+
+
+```{r}
+health_top
+
+health_topdt = as.data.frame(health_top)
+
+health_topdt = pivot_longer(health_topdt,
+            fatalities:totals,
+            names_to = "type",
+            values_to = "value")
+
+
+ggplot(health_topdt, aes(x =reorder(evtype, -value) , y=value)) + 
+  geom_bar(stat = "identity", aes(fill=type),position="dodge")  +
+  labs(y = "Total population health cost" , x = "Event Type")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+
+  ggtitle("Top 10 US Killers") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+
+**2. Across the United States, which types of events have the greatest economic consequences?**
+
+Tornado have the greatest economic consequences. 
+
+```{r}
+moneytotal_top
+
+moneytotal_topdt = as.data.frame(moneytotal_top)
+
+moneytotal_topdt = pivot_longer(moneytotal_topdt,
+            propcost:totals,
+            names_to = "type",
+            values_to = "value")
+
+
+ggplot(moneytotal_topdt, aes(x =reorder(evtype, -value) , y=value)) + 
+  geom_bar(stat = "identity", aes(fill=type),position="dodge")  +
+  labs(y = "Total Property Loss" , x = "Event Type")+
+  theme(axis.text.x = element_text(angle=45, hjust=1))+
+  ggtitle("Top 10 Most Damaging Event") +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
